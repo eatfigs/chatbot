@@ -16,26 +16,28 @@ t_model = st.sidebar.radio("Choose a model:", ["gpt-3.5-turbo", "gpt-4"], index=
 # Answer style toggle
 answer_style = st.sidebar.radio("Answer Style:", ["Brief", "Standard", "Detailed"], index=1, key="style")
 
-# File uploader (PDF)
-uploaded_file = st.sidebar.file_uploader("Upload PDF (e.g. lecture slides)", type=["pdf"])
+import pytesseract
+from PIL import Image
+import fitz  # PyMuPDF
 
-# --- INITIALIZATION ---
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "system", "content": "You are a helpful biology tutor for college-level non-majors."}
-    ]
-if "pdf_text" not in st.session_state:
-    st.session_state.pdf_text = ""
+# Upload block (PDF and image support)
+uploaded_file = st.sidebar.file_uploader("Upload PDF or image", type=["pdf", "jpg", "jpeg", "png"])
 
-# --- PARSE PDF IF UPLOADED ---
 if uploaded_file:
-    reader = PyPDF2.PdfReader(uploaded_file)
     text = ""
-    for page in reader.pages[:2]:  # Limit to first 2 pages for speed
-        text += page.extract_text() or ""
+    if uploaded_file.type == "application/pdf":
+        with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
+            for page in doc[:2]:  # limit to 2 pages
+                text += page.get_text()
+    else:
+        image = Image.open(uploaded_file)
+        text = pytesseract.image_to_string(image)
+
     st.session_state.pdf_text = text.strip()
     if text:
-        st.success("PDF uploaded and processed. I’ll consider it when answering.")
+        st.success("File uploaded and processed. I’ll consider it when answering.")
+    else:
+        st.warning("File uploaded but no readable text was extracted.")
 
 # --- HEADER WITH MODEL INFO ---
 st.markdown(f"<p style='color: gray;'>🧠 Model in use: <b>{t_model}</b></p>", unsafe_allow_html=True)
