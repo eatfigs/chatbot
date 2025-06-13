@@ -1,89 +1,81 @@
 import streamlit as st
 import openai
+import PyPDF2
+import io
 
-# Set up the app UI
+# --- CONFIGURATION ---
 st.set_page_config(page_title="Biology Chatbot")
 st.title("🤖 Biology Chatbot")
-st.markdown("Ask me anything about biology!")
 
-# Sidebar model selection
+# --- SIDEBAR SETTINGS ---
 st.sidebar.title("⚙️ Settings")
-model_choice = st.sidebar.radio(
-    "Choose a model:",
-    options=["gpt-3.5-turbo", "gpt-4"],
-    index=1,
-    key="model"
-)
 
-# Restart button
-if st.button("🔄 Restart Conversation"):
-    st.session_state.messages = [
-        {"role": "system", "content": "You are a friendly biology tutor helping college-level non-majors understand science clearly."}
-    ]
-    st.session_state.summary = None
-    st.rerun()
+# Model toggle
+t_model = st.sidebar.radio("Choose a model:", ["gpt-3.5-turbo", "gpt-4"], index=1, key="model")
 
-# Initialize state
+# Answer style toggle
+answer_style = st.sidebar.radio("Answer Style:", ["Brief", "Standard", "Detailed"], index=1, key="style")
+
+# File uploader (PDF)
+uploaded_file = st.sidebar.file_uploader("Upload PDF (e.g. lecture slides)", type=["pdf"])
+
+# --- INITIALIZATION ---
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "system", "content": "You are a friendly biology tutor helping college-level non-majors understand science clearly."}
+        {"role": "system", "content": "You are a helpful biology tutor for college-level non-majors."}
     ]
-if "summary" not in st.session_state:
-    st.session_state.summary = None
+if "pdf_text" not in st.session_state:
+    st.session_state.pdf_text = ""
 
-# Function to summarize older parts of the chat
-def summarize_chat():
-    client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-    summary_prompt = [
-        {"role": "system", "content": "Summarize this biology conversation in 1-2 sentences."},
-        *st.session_state.messages[1:-5]  # exclude system and last 5
-    ]
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=summary_prompt
-        )
-        summary = response.choices[0].message.content.strip()
-        return summary if summary else "Conversation summary not available."
-    except Exception as e:
-        return "Summary failed."
+# --- PARSE PDF IF UPLOADED ---
+if uploaded_file:
+    reader = PyPDF2.PdfReader(uploaded_file)
+    text = ""
+    for page in reader.pages[:2]:  # Limit to first 2 pages for speed
+        text += page.extract_text() or ""
+    st.session_state.pdf_text = text.strip()
+    if text:
+        st.success("PDF uploaded and processed. I’ll consider it when answering.")
 
-# Handle user input
-if prompt := st.chat_input("Ask a biology question..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+# --- HEADER WITH MODEL INFO ---
+st.markdown(f"<p style='color: gray;'>🧠 Model in use: <b>{t_model}</b></p>", unsafe_allow_html=True)
+
+# --- CHAT DISPLAY ---
+for msg in st.session_state.messages[1:]:  # skip initial system prompt
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+        if msg["role"] == "assistant":
+            st.code(msg["content"], language=None)
+            st.button("📋 Copy", key=f"copy_{hash(msg['content'])}", on_click=st.session_state.update, kwargs={})
+
+# --- CHAT INPUT ---
+prompt = st.chat_input("Ask a biology question...")
+if prompt:
     st.chat_message("user").markdown(prompt)
+    st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Summarize if too many messages
-    if len(st.session_state.messages) > 12:
-        summary = summarize_chat()
-        st.session_state.summary = summary
-        st.session_state.messages = [
-            {"role": "system", "content": f"You are a friendly biology tutor. Previous conversation summary: {summary}"},
-            *st.session_state.messages[-5:]
-        ]
+    # Adjust for answer style
+    style_instructions = {
+        "Brief": "Keep the answer short and focused.",
+        "Standard": "Answer as a clear, friendly tutor would.",
+        "Detailed": "Provide an in-depth and thorough explanation suitable for curious learners."
+    }
 
-    # Build client and send request
+    # Append answer style to system prompt
+    custom_context = style_instructions[answer_style]
+    if st.session_state.pdf_text:
+        custom_context += f" Also refer to the following uploaded document if it helps: {st.session_state.pdf_text[:1500]}"
+
+    st.session_state.messages[0]["content"] = f"You are a helpful biology tutor for college-level non-majors. {custom_context}"
+
+    # Call OpenAI
     client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    response = client.chat.completions.create(
+        model=t_model,
+        messages=st.session_state.messages
+    )
+    reply = response.choices[0].message.content.strip()
 
-    # Validate message structure
-    valid_messages = [
-        msg for msg in st.session_state.messages
-        if isinstance(msg, dict) and msg.get("role") and msg.get("content")
-    ]
-
-    try:
-        response = client.chat.completions.create(
-            model=st.session_state.model,
-            messages=valid_messages
-        )
-        reply = response.choices[0].message.content.strip()
-    except Exception as e:
-        reply = f"❌ Error: {str(e)}"
-
-    # Show and store reply
-    st.session_state.messages.append({"role": "assistant", "content": reply})
+    # Show assistant reply
     st.chat_message("assistant").markdown(reply)
-
-# Show full history (excluding initial system message)
-for msg in st.session_state.messages[1:]:
-    st.chat_message(msg["role"]).markdown(msg["content"])
+    st.session_state.messages.append({"role": "assistant", "content": reply})
