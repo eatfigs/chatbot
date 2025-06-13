@@ -27,6 +27,8 @@ if "messages" not in st.session_state:
     ]
 if "pdf_text" not in st.session_state:
     st.session_state.pdf_text = ""
+if "summary" not in st.session_state:
+    st.session_state.summary = ""
 
 # --- PARSE FILE IF UPLOADED ---
 if uploaded_file:
@@ -52,9 +54,6 @@ st.markdown(f"<p style='color: gray;'>🧠 Model in use: <b>{t_model}</b></p>", 
 for msg in st.session_state.messages[1:]:  # skip initial system prompt
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
-        if msg["role"] == "assistant":
-            st.code(msg["content"], language=None)
-            st.button("📋 Copy", key=f"copy_{hash(msg['content'])}", on_click=st.session_state.update, kwargs={})
 
 # --- CHAT INPUT ---
 prompt = st.chat_input("Ask a biology question...")
@@ -69,10 +68,12 @@ if prompt:
         "Detailed": "Provide an in-depth and thorough explanation suitable for curious learners."
     }
 
-    # Append answer style to system prompt
+    # Build custom context for the model
     custom_context = style_instructions[answer_style]
     if st.session_state.pdf_text:
         custom_context += f" Also refer to the following uploaded document if it helps: {st.session_state.pdf_text[:1500]}"
+    if st.session_state.summary:
+        custom_context += f" Summary of prior conversation: {st.session_state.summary}"
 
     st.session_state.messages[0]["content"] = f"You are a helpful biology tutor for college-level non-majors. {custom_context}"
 
@@ -87,3 +88,17 @@ if prompt:
     # Show assistant reply
     st.chat_message("assistant").markdown(reply)
     st.session_state.messages.append({"role": "assistant", "content": reply})
+
+    # --- SUMMARIZE TO REDUCE TOKEN USAGE ---
+    if len(st.session_state.messages) > 10:
+        short_summary = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Summarize this biology Q&A history in a concise paragraph."},
+                {"role": "user", "content": str(st.session_state.messages[-10:])}
+            ]
+        )
+        st.session_state.summary = short_summary.choices[0].message.content.strip()
+
+    # --- AUTO SCROLL (force rerun to latest message) ---
+    st.experimental_rerun()
