@@ -3,6 +3,7 @@ import openai
 import pytesseract
 from PIL import Image
 import fitz  # PyMuPDF
+from streamlit.components.v1 import html
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Biology Chatbot")
@@ -100,5 +101,9 @@ if prompt:
         )
         st.session_state.summary = short_summary.choices[0].message.content.strip()
 
-    # --- AUTO SCROLL (force rerun to latest message) ---
-    st.experimental_rerun()
+# --- AUTO SCROLL TO BOTTOM ---
+html("""
+<script>
+window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+</script>
+""")
