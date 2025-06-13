@@ -1,7 +1,8 @@
 import streamlit as st
 import openai
-import PyPDF2
-import io
+import pytesseract
+from PIL import Image
+import fitz  # PyMuPDF
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Biology Chatbot")
@@ -16,13 +17,18 @@ t_model = st.sidebar.radio("Choose a model:", ["gpt-3.5-turbo", "gpt-4"], index=
 # Answer style toggle
 answer_style = st.sidebar.radio("Answer Style:", ["Brief", "Standard", "Detailed"], index=1, key="style")
 
-import pytesseract
-from PIL import Image
-import fitz  # PyMuPDF
-
-# Upload block (PDF and image support)
+# File uploader (PDF + images)
 uploaded_file = st.sidebar.file_uploader("Upload PDF or image", type=["pdf", "jpg", "jpeg", "png"])
 
+# --- INITIALIZATION ---
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "system", "content": "You are a helpful biology tutor for college-level non-majors."}
+    ]
+if "pdf_text" not in st.session_state:
+    st.session_state.pdf_text = ""
+
+# --- PARSE FILE IF UPLOADED ---
 if uploaded_file:
     text = ""
     if uploaded_file.type == "application/pdf":
