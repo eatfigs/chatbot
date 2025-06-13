@@ -9,7 +9,7 @@ st.markdown("Ask me anything about biology!")
 st.sidebar.title("⚙️ Settings")
 model_choice = st.sidebar.radio(
     "Choose a model:",
-    options=["gpt-3.5-turbo", "gpt-4"],
+    options=["gpt-3.5-turbo (faster)", "gpt-4 (more detailed)"],
     index=1,
     key="model"
 )
