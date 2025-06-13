@@ -18,22 +18,18 @@ if "model" not in st.session_state:
 if "answer_style" not in st.session_state:
     st.session_state.answer_style = "standard"
 
-# --- Title and Controls ---
+# --- Sidebar ---
+st.sidebar.title("Settings")
+if st.sidebar.button("🔁 Restart Chat"):
+    st.session_state.messages = []
+    st.session_state.summary = ""
+
+st.session_state.model = st.sidebar.radio("Model", ["gpt-3.5-turbo", "gpt-4"], index=1)
+st.session_state.answer_style = st.sidebar.radio("Answer Style", ["brief", "standard", "detailed"], index=1)
+
+# --- Title ---
 st.title("🧬 TCU Biology Chatbot")
 st.markdown("Ask me anything about biology — I’m here to help non-majors like you.")
-
-col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
-
-with col1:
-    if st.button("🔁 Restart Chat"):
-        st.session_state.messages = []
-        st.session_state.summary = ""
-
-with col2:
-    st.session_state.model = st.radio("Model", ["gpt-3.5-turbo", "gpt-4"], index=1, horizontal=True)
-
-with col3:
-    st.session_state.answer_style = st.radio("Answer Style", ["brief", "standard", "detailed"], index=1, horizontal=True)
 
 # --- File Upload (PDF, Image) ---
 uploaded_file = st.file_uploader("📎 Upload a PDF or image (optional):", type=["pdf", "png", "jpg", "jpeg"])
